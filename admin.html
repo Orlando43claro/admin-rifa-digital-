@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración EXCLUSIVO</title> 
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #2c3e50, #1a242f); /* Fondo más oscuro para admin */
+            color: #ecf0f1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .contenedor-admin {
+            background: #34495e;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+            width: 90%;
+            max-width: 900px;
+        }
+
+        h2 {
+            color: #f1c40f; /* Color de énfasis */
+            border-bottom: 2px solid #f1c40f;
+            padding-bottom: 10px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        #contador {
+            font-size: 1.6em;
+            font-weight: 600;
+            color: #2ecc71;
+            margin-bottom: 25px;
+            text-align: center;
+            padding: 12px;
+            background: #2c3e50;
+            border-radius: 8px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            border: 1px solid #4a637a;
+            padding: 12px;
+            text-align: left;
+            font-size: 0.9em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: #ecf0f1;
+        }
+
+        th {
+            background-color: #3498db;
+            color: white;
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) {
+            background-color: #3f5770;
+        }
+
+        #estadoAdmin {
+            color: #e74c3c;
+            font-weight: 600;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        #logoutBtn {
+            padding: 10px 20px;
+            background: #e74c3c;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background 0.2s;
+        }
+        #logoutBtn:hover {
+            background: #c0392b;
+        }
+    </style>
+</head>
+<body>
+    <div class="contenedor-admin">
+        <h2>Panel de Administración de Usuarios</h2>
+        
+        <p id="estadoAdmin">Verificando permisos y cargando datos...</p>
+        
+        <div id="contenidoAdmin" style="display: none;">
+            <div id="contador">Total de Usuarios Registrados: 0</div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Email</th>
+                        <th>UID de Usuario</th>
+                        <th>Fecha de Registro</th>
+                        <th>Admin</th>
+                    </tr>
+                </thead>
+                <tbody id="listaUsuarios">
+                    </tbody>
+            </table>
+        </div>
+        <button id="logoutBtn">Cerrar Sesión de Admin</button>
+    </div>
+
+    <script type="module">
+        // Importa las funciones necesarias de Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+        import { getFirestore, collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+
+        // ⚠️ CONFIGURACIÓN DE FIREBASE: (DEBES USAR LA MISMA CONFIGURACIÓN DE TU PROYECTO)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDY5KBUwbDwjeCYY7ILXkRB5EJBVoVAmF0", 
+            authDomain: "talonario-rifa.firebaseapp.com",
+            projectId: "talonario-rifa",
+            storageBucket: "talonario-rifa.appspot.com",
+            messagingSenderId: "987446023081",
+            appId: "1:987446023081:web:150e8d7a94975593ac2ab8",
+            measurementId: "G-FWH8F9SVFM"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const perfilesRef = collection(db, 'perfiles');
+
+        const estadoAdmin = document.getElementById('estadoAdmin');
+        const contenidoAdmin = document.getElementById('contenidoAdmin');
+        const listaUsuarios = document.getElementById('listaUsuarios');
+        const contador = document.getElementById('contador');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        // Función para cerrar sesión
+        logoutBtn.addEventListener('click', () => {
+            signOut(auth).then(() => {
+                alert("Sesión de administrador cerrada.");
+                // Redirigir a la página de login del sitio principal
+                window.location.href = 'index.html'; 
+            }).catch((error) => {
+                console.error("Error al cerrar sesión:", error);
+            });
+        });
+
+        // --- FUNCIONES DE ADMINISTRACIÓN ---
+
+        async function cargarListaUsuarios() {
+            listaUsuarios.innerHTML = '<tr><td colspan="5">Cargando datos...</td></tr>';
+            let contadorUsuarios = 0;
+            
+            try {
+                // Requiere el permiso 'list' en las Reglas de Seguridad de Firestore
+                const snapshot = await getDocs(perfilesRef); 
+                contadorUsuarios = snapshot.size;
+                listaUsuarios.innerHTML = ''; // Limpiar después de obtener datos
+
+                snapshot.docs.forEach((d, index) => {
+                    const data = d.data();
+                    const fila = document.createElement('tr');
+                    
+                    const fecha = data.createdAt && typeof data.createdAt.toDate === 'function' 
+                                  ? data.createdAt.toDate().toLocaleDateString() 
+                                  : 'N/A';
+                    const esAdmin = data.isAdmin ? '✅ Sí' : '❌ No';
+
+                    fila.innerHTML = `
+                        <td>${index + 1}</td>
+                        <td>${data.email || 'N/A'}</td>
+                        <td title="${d.id}">${d.id.substring(0, 15)}...</td>
+                        <td>${fecha}</td>
+                        <td>${esAdmin}</td>
+                    `;
+                    listaUsuarios.appendChild(fila);
+                });
+
+                contador.textContent = `Total de Usuarios Registrados: ${contadorUsuarios}`;
+            } catch (error) {
+                console.error("Error al cargar usuarios (Revisa las Reglas de Seguridad):", error);
+                estadoAdmin.textContent = "Error de conexión o permisos. ¡Revisa las Reglas de Seguridad!";
+            }
+        }
+        
+        // --- GUARDIA DE SEGURIDAD Y PERMISOS ---
+        
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                // No autenticado: Redirigir (Necesitas tener un index.html con login en este nuevo sitio)
+                estadoAdmin.textContent = "No has iniciado sesión. Redirigiendo al login...";
+                setTimeout(() => { window.location.href = 'index.html'; }, 2000); 
+                return;
+            }
+            
+            try {
+                // 1. Obtener el perfil del usuario logeado
+                const perfilDoc = await getDoc(doc(db, 'perfiles', user.uid));
+                
+                // 2. Verificar el campo 'isAdmin: true'
+                if (perfilDoc.exists() && perfilDoc.data().isAdmin === true) {
+                    // PERMISO CONCEDIDO
+                    estadoAdmin.style.display = 'none';
+                    contenidoAdmin.style.display = 'block';
+                    cargarListaUsuarios();
+                    
+                } else {
+                    // PERMISO DENEGADO
+                    estadoAdmin.textContent = `Acceso Denegado. El usuario ${user.email} no tiene permisos de administrador.`;
+                    estadoAdmin.style.color = '#e74c3c';
+                    
+                    // Cierra la sesión si intenta acceder sin permiso
+                    signOut(auth).then(() => {
+                        setTimeout(() => { window.location.href = 'index.html'; }, 3000);
+                    });
+                }
+            } catch (error) {
+                console.error("Error al verificar permisos:", error);
+                estadoAdmin.textContent = "Error grave al verificar permisos. Redirigiendo...";
+                signOut(auth).then(() => {
+                    setTimeout(() => { window.location.href = 'index.html'; }, 3000);
+                });
+            }
+        });
+    </script>
+</body>
+</html>
